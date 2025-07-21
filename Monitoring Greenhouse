@@ -1,0 +1,196 @@
+// Paste Token dari Blynk pada 3 baris bawah ini
+#define BLYNK_TEMPLATE_ID "Template-id"
+#define BLYNK_TEMPLATE_NAME "Template-name"
+#define BLYNK_AUTH_TOKEN "Token
+
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <BlynkSimpleEsp32.h>
+#include <DHT.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+// WiFi & Blynk
+const char* ssid = "imeh";
+const char* password = "1234567890";
+char auth[] = BLYNK_AUTH_TOKEN;
+
+// Pin
+const int soilMoisturePin = 34;
+const int ldrPin = 35;
+const int buzzerPin = 27;
+const int lampuPin = 26;
+const int dhtPin = 16;
+
+// DHT Setup
+#define DHTTYPE DHT11
+DHT dht(dhtPin, DHTTYPE);
+
+// OLED Setup
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET    -1
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+// Soil Calibration
+const int adcMin = 1200; // Basah
+const int adcMax = 3200; // Kering
+
+BlynkTimer timer;
+
+// OLED switching state
+int oledState = 0; // 0 = Temp & Hum, 1 = Soil
+unsigned long lastOledSwitch = 0;
+const unsigned long oledInterval = 5000; // 5 detik
+
+void sendSensorData() {
+  // Baca Soil Moisture
+  int soilValue = analogRead(soilMoisturePin);
+  int kelembabanTanah = map(soilValue, adcMin, adcMax, 100, 0);
+  kelembabanTanah = constrain(kelembabanTanah, 0, 100);
+  Blynk.virtualWrite(V0, kelembabanTanah);
+
+  // Baca DHT11
+  float suhu = dht.readTemperature();
+  float kelembabanUdara = dht.readHumidity();
+  if (isnan(suhu) || isnan(kelembabanUdara)) {
+    Serial.println("Gagal membaca data DHT11");
+    return;
+  }
+  Blynk.virtualWrite(V1, suhu);
+  Blynk.virtualWrite(V2, kelembabanUdara);
+
+  // Serial Monitor
+  Serial.println("===============");
+  Serial.print("Kelembaban Tanah: "); Serial.print(kelembabanTanah); Serial.println(" %");
+  Serial.print("Suhu: "); Serial.print(suhu); Serial.println(" °C");
+  Serial.print("Kelembaban Udara: "); Serial.print(kelembabanUdara); Serial.println(" %");
+
+  // Buzzer bip sesuai kondisi
+  if (kelembabanTanah < 50) {
+    Blynk.logEvent("tanah_kering", "Kelembaban tanah di bawah 50%");
+    for (int i = 0; i < 2; i++) {
+      tone(buzzerPin, 1000);
+      delay(200);
+      noTone(buzzerPin);
+      delay(200);
+    }
+  }
+
+  if (suhu > 30) {
+    Blynk.logEvent("suhu_tinggi", "Suhu melebihi 30°C");
+    for (int i = 0; i < 3; i++) {
+      tone(buzzerPin, 1500);
+      delay(150);
+      noTone(buzzerPin);
+      delay(150);
+    }
+  }
+
+  if (kelembabanTanah >= 50 && suhu <= 30) {
+    noTone(buzzerPin);
+  }
+
+  // Tampilkan di OLED bergantian
+  unsigned long currentMillis = millis();
+  if (currentMillis - lastOledSwitch >= oledInterval) {
+    oledState = (oledState + 1) % 2;
+    lastOledSwitch = currentMillis;
+  }
+
+  display.clearDisplay();
+  display.setTextColor(WHITE);
+
+  if (oledState == 0) {
+    // Tampilan Temperature & Humidity
+    display.setTextSize(1);
+    display.setCursor(0, 0);
+    display.println("Temperature");
+
+    display.setTextSize(2);
+    display.setCursor(0, 15);
+    display.print(suhu, 1);
+    display.println(" C");
+
+    display.setTextSize(1);
+    display.setCursor(0, 40);
+    display.println("Humidity");
+
+    display.setTextSize(2);
+    display.setCursor(0, 52);
+    display.print(kelembabanUdara, 1);
+    display.println(" %");
+  } else {
+    // Tampilan Soil Moisture
+    display.setTextSize(1);
+    display.setCursor(0, 0);
+    display.println("Soil Moisture");
+
+    display.setTextSize(2);
+    display.setCursor(0, 20);
+    display.print(kelembabanTanah);
+    display.println(" %");
+  }
+
+  display.display();
+}
+
+void kontrolLampuOtomatis() {
+  int nilaiLDR = analogRead(ldrPin);
+  if (nilaiLDR > 2000) {
+    digitalWrite(lampuPin, HIGH); // Gelap → lampu nyala
+    Serial.println("Lampu HIDUP (malam)");
+  } else {
+    digitalWrite(lampuPin, LOW);  // Terang → lampu mati
+    Serial.println("Lampu MATI (siang)");
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(buzzerPin, OUTPUT);
+  pinMode(lampuPin, OUTPUT);
+  noTone(buzzerPin);
+  digitalWrite(lampuPin, LOW);
+
+  dht.begin();
+
+  // OLED Init
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("OLED tidak ditemukan!"));
+    while (true);
+  }
+
+  // Tampilan awal sekali
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setTextColor(WHITE);
+  display.setCursor(0, 20);
+  display.println("MONITORING");
+  display.setCursor(0, 40);
+  display.println("GREENHOUSE");
+  display.display();
+  delay(4000);
+
+  // WiFi
+  WiFi.begin(ssid, password);
+  Serial.print("Menghubungkan WiFi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi terhubung");
+  Serial.println(WiFi.localIP());
+
+  Blynk.begin(auth, ssid, password);
+
+  // Timer
+  timer.setInterval(5000L, sendSensorData);
+  timer.setInterval(3000L, kontrolLampuOtomatis);
+}
+
+void loop() {
+  Blynk.run();
+  timer.run();
+}
