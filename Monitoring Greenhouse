@@ -49,7 +49,7 @@ void sendSensorData() {
   int soilValue = analogRead(soilMoisturePin);
   int kelembabanTanah = map(soilValue, adcMin, adcMax, 100, 0);
   kelembabanTanah = constrain(kelembabanTanah, 0, 100);
-  Blynk.virtualWrite(V0, kelembabanTanah);
+  Blynk.virtualWrite(V2, kelembabanTanah);
 
   // Baca DHT11
   float suhu = dht.readTemperature();
@@ -58,8 +58,8 @@ void sendSensorData() {
     Serial.println("Gagal membaca data DHT11");
     return;
   }
-  Blynk.virtualWrite(V1, suhu);
-  Blynk.virtualWrite(V2, kelembabanUdara);
+  Blynk.virtualWrite(V0, suhu);
+  Blynk.virtualWrite(V1, kelembabanUdara);
 
   // Serial Monitor
   Serial.println("===============");
