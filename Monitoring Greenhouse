@@ -17,7 +17,7 @@ const char* password = "1234567890";
 char auth[] = BLYNK_AUTH_TOKEN;
 
 // Pin
-const int soilMoisturePin = 34;
+const int soilMoisturePin = 34; 
 const int ldrPin = 35;
 const int buzzerPin = 27;
 const int lampuPin = 26;
@@ -47,9 +47,9 @@ const unsigned long oledInterval = 5000; // 5 detik
 void sendSensorData() {
   // Baca Soil Moisture
   int soilValue = analogRead(soilMoisturePin);
-  int kelembabanTanah = map(soilValue, adcMin, adcMax, 100, 0);
+  int kelembabanTanah = map(soilValue, adcMin, adcMax, 100, 0); // Nilai ADC diubah ke persen
   kelembabanTanah = constrain(kelembabanTanah, 0, 100);
-  Blynk.virtualWrite(V2, kelembabanTanah);
+  Blynk.virtualWrite(V2, kelembabanTanah); // Virual pin Blynk
 
   // Baca DHT11
   float suhu = dht.readTemperature();
@@ -58,8 +58,8 @@ void sendSensorData() {
     Serial.println("Gagal membaca data DHT11");
     return;
   }
-  Blynk.virtualWrite(V0, suhu);
-  Blynk.virtualWrite(V1, kelembabanUdara);
+  Blynk.virtualWrite(V0, suhu); // Virual pin Blynk
+  Blynk.virtualWrite(V1, kelembabanUdara); // Virual pin Blynk
 
   // Serial Monitor
   Serial.println("===============");
@@ -69,7 +69,7 @@ void sendSensorData() {
 
   // Buzzer bip sesuai kondisi
   if (kelembabanTanah < 50) {
-    Blynk.logEvent("tanah_kering", "Kelembaban tanah di bawah 50%");
+    Blynk.logEvent("tanah_kering", "Kelembaban tanah di bawah 50%"); // Mengirimkan notifikasi ke email
     for (int i = 0; i < 2; i++) {
       tone(buzzerPin, 1000);
       delay(200);
@@ -79,7 +79,7 @@ void sendSensorData() {
   }
 
   if (suhu > 30) {
-    Blynk.logEvent("suhu_tinggi", "Suhu melebihi 30°C");
+    Blynk.logEvent("suhu_tinggi", "Suhu melebihi 30°C"); // Mengirimkan notifikasi ke email
     for (int i = 0; i < 3; i++) {
       tone(buzzerPin, 1500);
       delay(150);
